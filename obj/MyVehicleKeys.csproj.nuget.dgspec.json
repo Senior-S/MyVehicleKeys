@@ -1,0 +1,74 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\Users\\maxim\\Desktop\\Plugins\\OpenModPlugins\\MyVehicleKeys - JSON Version\\MyVehicleKeys.csproj": {}
+  },
+  "projects": {
+    "C:\\Users\\maxim\\Desktop\\Plugins\\OpenModPlugins\\MyVehicleKeys - JSON Version\\MyVehicleKeys.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\maxim\\Desktop\\Plugins\\OpenModPlugins\\MyVehicleKeys - JSON Version\\MyVehicleKeys.csproj",
+        "projectName": "SS.MyVehicleKeys",
+        "projectPath": "C:\\Users\\maxim\\Desktop\\Plugins\\OpenModPlugins\\MyVehicleKeys - JSON Version\\MyVehicleKeys.csproj",
+        "packagesPath": "C:\\Users\\maxim\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\maxim\\Desktop\\Plugins\\OpenModPlugins\\MyVehicleKeys - JSON Version\\obj\\",
+        "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Microsoft\\Xamarin\\NuGet\\"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\maxim\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Xamarin.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net461"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net461": {
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "net461": {
+          "dependencies": {
+            "Legacy2CPSWorkaround": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[1.0.0, )"
+            },
+            "Microsoft.NETFramework.ReferenceAssemblies.net461": {
+              "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[1.0.0, )"
+            },
+            "OpenMod.UnityEngine.Redist": {
+              "target": "Package",
+              "version": "[2018.4.23, )"
+            },
+            "OpenMod.Unturned": {
+              "target": "Package",
+              "version": "[2.1.4, )"
+            },
+            "OpenMod.Unturned.Redist": {
+              "target": "Package",
+              "version": "[3.20.9, )"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\3.1.400\\RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

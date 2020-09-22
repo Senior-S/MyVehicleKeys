@@ -1,0 +1,3 @@
+plugin_configuration:  
+  vehicle_keys:
+    default_vehicle_keys: 3
