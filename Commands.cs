@@ -1,49 +1,43 @@
-﻿using Cysharp.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Localization;
-using Microsoft.Extensions.Logging;
-using MyVehicleKeys.Helper;
-using OpenMod.API.Commands;
-using OpenMod.API.Permissions;
-using OpenMod.API.Users;
-using OpenMod.Core.Commands;
-using OpenMod.Core.Users;
-using OpenMod.Unturned.Users;
+﻿using MyVehicleKeys.Helper;
+using Rocket.API;
+using Rocket.Unturned.Chat;
+using Rocket.Unturned.Player;
 using SDG.Unturned;
+using Steamworks;
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using UnityEngine;
-using Command = OpenMod.Core.Commands.Command;
 
-namespace MyVehicleKeys
+namespace MyVehicleKeys.Commands
 {
-    #region CommandKeys
-    [Command("keys")]
-    [CommandDescription("Show your actual keys")]
-    public class CommandKeys : Command
+    public class CommandKeys : IRocketCommand
     {
-        private readonly ILogger<CommandKeys> m_Logger;
-        private readonly IStringLocalizer m_StringLocalizer;
+        public AllowedCaller AllowedCaller => AllowedCaller.Player;
 
-        public CommandKeys(IServiceProvider serviceProvider, ILogger<CommandKeys> logger, IStringLocalizer stringLocalizer) : base(serviceProvider)
-        {
-            m_Logger = logger;
-            m_StringLocalizer = stringLocalizer;
-        }
+        public string Name => "keys";
 
-        protected async override Task OnExecuteAsync()
+        public string Help => "Show your actual keys";
+
+        public string Syntax => string.Empty;
+
+        public List<string> Aliases => new List<string>();
+
+        public List<string> Permissions => new List<string> { "SS.keys" };
+
+        public void Execute(IRocketPlayer caller, string[] command)
         {
-            UnturnedUser user = (UnturnedUser)Context.Actor;
+            CSteamID cSteam = new CSteamID(ulong.Parse(caller.Id));
+            UnturnedPlayer user = UnturnedPlayer.FromCSteamID(cSteam);
             List<uint> keys = Utils.GetPlayerKeys(user.Id);
 
             if (keys.Count <= 0)
             {
-                throw new UserFriendlyException(m_StringLocalizer["plugin_translations:any_vehicle_keys"]);
+                UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("any_vehicle_keys"), true);
+                return;
             }
             else
             {
-                await user.PrintMessageAsync(m_StringLocalizer["plugin_translations:vehicle_keys"], System.Drawing.Color.Green);
+                UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("vehicle_keys"), Color.green, true);
                 for (int i = 0; i < keys.Count; i++)
                 {
                     InteractableVehicle vehicle = VehicleManager.findVehicleByNetInstanceID(keys[i]);
@@ -53,105 +47,97 @@ namespace MyVehicleKeys
                     }
                     else
                     {
-                        var distance = UnityEngine.Vector3.Distance(user.Player.Player.transform.position, vehicle.transform.position);
-                        await user.PrintMessageAsync($"{keys[i]}(Vehicle id: {vehicle.id}, Distance: {Math.Floor(distance)})");
+                        var distance = UnityEngine.Vector3.Distance(user.Player.transform.position, vehicle.transform.position);
+                        UnturnedChat.Say(user.CSteamID, $"{keys[i]}(Vehicle id: {vehicle.id}, Distance: {Math.Floor(distance)})", Color.white, true);
                     }
                 }
             }
         }
     }
-    #endregion
 
-    #region CommandFindVehicle
-    [Command("findvehicle")]
-    [CommandAlias("fv")]
-    [CommandAlias("findv")]
-    [CommandAlias("fvehicle")]
-    [CommandSyntax("<vehicle id>")]
-    [CommandDescription("Set the vehicle position in your map")]
-    public class CommandFindVehicle : Command
+    public class CommandFindVehicle : IRocketCommand
     {
-        private readonly ILogger<CommandFindVehicle> m_Logger;
-        private readonly IStringLocalizer m_StringLocalizer;
+        public AllowedCaller AllowedCaller => AllowedCaller.Player;
 
-        public CommandFindVehicle(IServiceProvider serviceProvider, ILogger<CommandFindVehicle> logger, IStringLocalizer stringLocalizer) : base(serviceProvider)
-        {
-            m_Logger = logger;
-            m_StringLocalizer = stringLocalizer;
-        }
+        public string Name => "findvehicle";
 
-        protected async override Task OnExecuteAsync()
+        public string Help => "Set the vehicle position in your map";
+
+        public string Syntax => "<vehicle id>";
+
+        public List<string> Aliases => new List<string> { "fv", "findv", "fvehicle" };
+
+        public List<string> Permissions => new List<string> { "SS.findvehicle" };
+
+        public void Execute(IRocketPlayer caller, string[] command)
         {
-            UnturnedUser user = (UnturnedUser)Context.Actor;
-            uint id = await Context.Parameters.GetAsync<uint>(0);
+            CSteamID cSteam = new CSteamID(ulong.Parse(caller.Id));
+            UnturnedPlayer user = UnturnedPlayer.FromCSteamID(cSteam);
+            uint id = uint.Parse(command[0]);
             List<uint> keys = Utils.GetPlayerKeys(user.Id);
             if (keys.Count <= 0 || keys == null)
             {
-                throw new UserFriendlyException(m_StringLocalizer["plugin_translations:any_vehicle_keys"]);
+                UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("any_vehicle_keys"), true);
+                return;
             }
             else if (keys.Contains(id))
             {
                 InteractableVehicle vehicle = VehicleManager.findVehicleByNetInstanceID(id);
                 if (vehicle != null || !vehicle.isExploded || !vehicle.isDead)
                 {
-                    await UniTask.SwitchToMainThread();
-                    await user.PrintMessageAsync(m_StringLocalizer["plugin_translations:vehicle_position", new { vehicleId = vehicle.instanceID }], System.Drawing.Color.Green);
-                    user.Player.Player.quests.replicateSetMarker(true, vehicle.transform.position, "Your vehicle!");
+                    UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("vehicle_position", vehicle.instanceID), Color.green);
+                    user.Player.quests.replicateSetMarker(true, vehicle.transform.position, "Your vehicle!");
                 }
                 else
                 {
-                    await user.PrintMessageAsync(m_StringLocalizer["plugin_translations:vehicle_explode"], System.Drawing.Color.Red);
+                    UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("vehicle_explode"), Color.red);
                     Utils.RemovePlayerKey(id, user.Id);
                 }
             }
             else
             {
-                throw new UserFriendlyException(m_StringLocalizer["plugin_translations:error_keys"]);
+                UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("error_keys"), true);
             }
         }
     }
-    #endregion
 
-    #region CommandGiftVehicle
-    [Command("giftvehicle")]
-    [CommandAlias("gv")]
-    [CommandAlias("giftv")]
-    [CommandAlias("gvehicle")]
-    [CommandSyntax("<player> <vehicle instance id>")]
-    [CommandDescription("Gift a specific vehicle to other player.")]
-    public class CommandGiftVehicle : Command
+    public class CommandGiftVehicle : IRocketCommand
     {
-        private readonly IUserManager m_UserManager;
-        private readonly IStringLocalizer m_StringLocalizer;
-        private readonly IPermissionChecker m_PermissionChecker;
-        private readonly IConfiguration m_Configuration;
+        public AllowedCaller AllowedCaller => AllowedCaller.Player;
 
-        public CommandGiftVehicle(IServiceProvider serviceProvider, IUserManager userManager, IStringLocalizer stringLocalizer, IPermissionChecker permissionChecker, IConfiguration configuration) : base(serviceProvider)
-        {
-            m_UserManager = userManager;
-            m_StringLocalizer = stringLocalizer;
-            m_PermissionChecker = permissionChecker;
-            m_Configuration = configuration;
-        }
+        public string Name => "giftvehicle";
 
-        protected async override Task OnExecuteAsync()
+        public string Help => "Gift a specific vehicle to other player.";
+
+        public string Syntax => "<player> <vehicle id>";
+
+        public List<string> Aliases => new List<string> { "gv", "giftv", "gvehicle" };
+
+        public List<string> Permissions => new List<string> { "SS.giftvehicle" };
+
+        public void Execute(IRocketPlayer caller, string[] command)
         {
-            UnturnedUser user = (UnturnedUser)Context.Actor;
-            uint id = await Context.Parameters.GetAsync<uint>(1);
-            string vic = await Context.Parameters.GetAsync<string>(0);
+            CSteamID cSteam = new CSteamID(ulong.Parse(caller.Id));
+            UnturnedPlayer user = UnturnedPlayer.FromCSteamID(cSteam);
+            uint id = uint.Parse(command[1]);
+            string vic = command[0];
             Player player = PlayerTool.getPlayer(vic);
             if (player == null)
             {
-                throw new UserFriendlyException(m_StringLocalizer["plugin_translations:error_player"]);
+                UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("error_player"), true);
+                return;
             }
-            UnturnedUser victim = (UnturnedUser)await m_UserManager.FindUserAsync(KnownActorTypes.Player, player.channel.owner.playerID.steamID.ToString(), UserSearchMode.FindById);
+            CSteamID vSteamid = player.channel.owner.playerID.steamID;
+            UnturnedPlayer victim = UnturnedPlayer.FromCSteamID(vSteamid);
             if (victim == null)
             {
-                throw new UserFriendlyException(m_StringLocalizer["plugin_translations:error_player"]);
+                UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("error_player"), true);
+                return;
             }
             if (victim == user)
             {
-                throw new UserFriendlyException("You can transfer a vehicle to yourself.");
+                UnturnedChat.Say(user.CSteamID, "You can transfer a vehicle to yourself.", true);
+                return;
             }
             List<uint> userKeys = Utils.GetPlayerKeys(user.Id);
             List<uint> victimKeys = Utils.GetPlayerKeys(victim.Id);
@@ -160,165 +146,155 @@ namespace MyVehicleKeys
             {
                 if (victimKeys.Count >= vMaxKeys)
                 {
-                    throw new UserFriendlyException(m_StringLocalizer["plugin_translations:victim_reach_max_keys"]);
+                    UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("victim_reach_max_keys"), Color.red, true);
+                    return;
                 }
                 else
                 {
                     Utils.RemovePlayerKey(id, user.Id);
                     Utils.AddPlayerKey(id, user.Id);
 
-                    await user.PrintMessageAsync(m_StringLocalizer["plugin_translations:player_vehicle_transfered", new { vehicleId = id, victimName = victim.DisplayName }], System.Drawing.Color.Blue);
+                    UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("player_vehicle_transfered", id, victim.DisplayName), Color.blue, true);
                 }
             }
             else
             {
-                throw new UserFriendlyException(m_StringLocalizer["plugin_translations:error_keys"]);
+                UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("error_keys"), true);
+                return;
             }
         }
     }
-    #endregion
 
-    #region CommandDeleteVehicle
-    [Command("deletevehicle")]
-    [CommandAlias("dv")]
-    [CommandAlias("deletev")]
-    [CommandAlias("dvehicle")]
-    [CommandSyntax("<vehicle id>")]
-    [CommandDescription("Delete a vehicle from your keys.")]
-    public class CommandDeleteVehicle : Command
+    public class CommandDeleteVehicle : IRocketCommand
     {
-        private readonly ILogger<CommandDeleteVehicle> m_Logger;
-        private readonly IStringLocalizer m_StringLocalizer;
+        public AllowedCaller AllowedCaller => AllowedCaller.Player;
 
-        public CommandDeleteVehicle(IServiceProvider serviceProvider, ILogger<CommandDeleteVehicle> logger, IStringLocalizer stringLocalizer) : base(serviceProvider)
-        {
-            m_Logger = logger;
-            m_StringLocalizer = stringLocalizer;
-        }
+        public string Name => "deletevehicle";
 
-        protected async override Task OnExecuteAsync()
+        public string Help => "Delete a vehicle from your keys.";
+
+        public string Syntax => "<vehicle id>";
+
+        public List<string> Aliases => new List<string> { "dv", "deletev", "dvehicle" };
+
+        public List<string> Permissions => new List<string> { "SS.deletevehicle" };
+
+        public void Execute(IRocketPlayer caller, string[] command)
         {
-            UnturnedUser user = (UnturnedUser)Context.Actor;
-            uint id = await Context.Parameters.GetAsync<uint>(0);
+            CSteamID cSteam = new CSteamID(ulong.Parse(caller.Id));
+            UnturnedPlayer user = UnturnedPlayer.FromCSteamID(cSteam);
+            uint id = uint.Parse(command[1]);
             string error = Utils.RemovePlayerKey(id, user.Id);
             if (error == "nokey")
             {
-                throw new UserFriendlyException(m_StringLocalizer["plugin_translations:error_keys"]);
+                UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("error_keys"), true);
+                return;
             }
             else
             {
                 InteractableVehicle vehicle = VehicleManager.findVehicleByNetInstanceID(id);
-                await UniTask.SwitchToMainThread();
                 VehicleManager.instance.channel.send("tellVehicleLock", ESteamCall.ALL, ESteamPacket.UPDATE_RELIABLE_BUFFER, new object[]
                 {
                             vehicle.instanceID,
-                            user.SteamId,
-                            user.Player.Player.quests.groupID,
+                            user.CSteamID,
+                            user.Player.quests.groupID,
                             false
                 });
-                await user.PrintMessageAsync(m_StringLocalizer["plugin_translations:player_vehicle_key_removed", new { vehicleId = vehicle.instanceID }], System.Drawing.Color.Red);
+                UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("player_vehicle_key_removed", vehicle.instanceID), Color.red, true);
             }
         }
     }
-    #endregion
 
-    #region CommandRemoveVehicleKey
-    [Command("removevehiclekey")]
-    [CommandAlias("rvk")]
-    [CommandAlias("removevk")]
-    [CommandAlias("rvkey")]
-    [CommandDescription("Remove a key from a vehicle!")]
-    public class CommandRemoveVehicleKey : Command
+    public class CommandRemoveVehicleKey : IRocketCommand
     {
-        private readonly ILogger<CommandRemoveVehicleKey> m_Logger;
-        private readonly IUserManager m_UserManager;
-        private readonly IStringLocalizer m_StringLocalizer;
+        public AllowedCaller AllowedCaller => AllowedCaller.Player;
 
-        public CommandRemoveVehicleKey(IServiceProvider serviceProvider, ILogger<CommandRemoveVehicleKey> logger, IUserManager userManager, IStringLocalizer stringLocalizer) : base(serviceProvider)
-        {
-            m_Logger = logger;
-            m_UserManager = userManager;
-            m_StringLocalizer = stringLocalizer;
-        }
+        public string Name => "removevehiclekey";
 
-        protected async override Task OnExecuteAsync()
+        public string Help => "Remove a key from a vehicle.";
+
+        public string Syntax => string.Empty;
+
+        public List<string> Aliases => new List<string> { "rvk", "removevk", "rvkey" };
+
+        public List<string> Permissions => new List<string> { "SS.removevehiclekey" };
+
+        public void Execute(IRocketPlayer caller, string[] command)
         {
-            var user = (UnturnedUser)Context.Actor;
-            var vehicle = RaycastHelper.GetVehicleFromHits(RaycastHelper.RaycastAll(new Ray(user.Player.Player.look.aim.position, user.Player.Player.look.aim.forward), 4f, RayMasks.VEHICLE));
+            CSteamID cSteam = new CSteamID(ulong.Parse(caller.Id));
+            UnturnedPlayer user = UnturnedPlayer.FromCSteamID(cSteam);
+            var vehicle = RaycastHelper.GetVehicleFromHits(RaycastHelper.RaycastAll(new Ray(user.Player.look.aim.position, user.Player.look.aim.forward), 4f, RayMasks.VEHICLE));
             if (vehicle != null)
             {
                 string Owner = Utils.CheckVehicleOwner(vehicle.instanceID);
                 if (Owner == null)
                 {
-                    throw new UserFriendlyException(m_StringLocalizer["plugin_translations:error_forced_key_removed"]);
+                    UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("error_forced_key_removed"), true);
+                    return;
                 }
                 else
                 {
                     Utils.RemovePlayerKey(vehicle.instanceID, Owner);
-                    await user.PrintMessageAsync(m_StringLocalizer["plugin_translations:vehicle_forced_key_removed"], System.Drawing.Color.Green);
-                    await UniTask.SwitchToMainThread();
+                    UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("vehicle_forced_key_removed"), Color.green, true);
                     VehicleManager.instance.channel.send("tellVehicleLock", ESteamCall.ALL, ESteamPacket.UPDATE_RELIABLE_BUFFER, new object[]
                     {
                             vehicle.instanceID,
-                            user.SteamId,
-                            user.Player.Player.quests.groupID,
+                            user.CSteamID,
+                            user.Player.quests.groupID,
                             false
                     });
-                    UnturnedUser victim = (UnturnedUser)await m_UserManager.FindUserAsync(KnownActorTypes.Player, Owner, UserSearchMode.FindById);
-                    if (victim is UnturnedUser)
+                    CSteamID cs = new CSteamID(ulong.Parse(Owner));
+                    UnturnedPlayer victim = UnturnedPlayer.FromCSteamID(cs);
+                    if (victim is UnturnedPlayer)
                     {
-                        await victim.PrintMessageAsync(m_StringLocalizer["plugin_translations:player_forced_key_removed", new { vehicleId = vehicle.instanceID }], System.Drawing.Color.Red);
+                        UnturnedChat.Say(victim.CSteamID, MyVehicleKeys.Instance.Translate("player_forced_key_removed"), Color.red, true);
                     }
                 }
             }
             else
             {
-                throw new UserFriendlyException(m_StringLocalizer["plugin_translations:error_vehicle_not_found"]);
+                UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("error_vehicle_not_found"), Color.green, true);
+                return;
             }
         }
     }
-    #endregion
 
-    #region CommandSetPlayerMaxKeys
-    [Command("setplayermaxkeys")]
-    [CommandAlias("spmk")]
-    [CommandAlias("setpmk")]
-    [CommandAlias("spmaxkeys")]
-    [CommandAlias("setplayermk")]
-    [CommandSyntax("<player> <keys>")]
-    [CommandDescription("Set the max keys for a player.")]
-    public class CommandSetPlayerMaxKeys : Command
+    public class CommandSetPlayerMaxKeys : IRocketCommand
     {
-        private readonly ILogger<CommandSetPlayerMaxKeys> m_Logger;
-        private readonly IStringLocalizer m_StringLocalizer;
-        private readonly IUserManager m_UserManager;
+        public AllowedCaller AllowedCaller => AllowedCaller.Player;
 
-        public CommandSetPlayerMaxKeys(IServiceProvider serviceProvider, ILogger<CommandSetPlayerMaxKeys> logger, IStringLocalizer stringLocalizer, IUserManager userManager) : base(serviceProvider)
-        {
-            m_Logger = logger;
-            m_StringLocalizer = stringLocalizer;
-            m_UserManager = userManager;
-        }
+        public string Name => "setplayermaxkeys";
 
-        protected async override Task OnExecuteAsync()
+        public string Help => "Set the max keys for a player.";
+
+        public string Syntax => "<player> <keys>";
+
+        public List<string> Aliases => new List<string> { "spmk", "setpmk", "spmaxkeys", "setplayermk" };
+
+        public List<string> Permissions => new List<string> { "SS.setplayermaxkeys" };
+
+        public void Execute(IRocketPlayer caller, string[] command)
         {
-            UnturnedUser user = (UnturnedUser)Context.Actor;
-            string playerName = await Context.Parameters.GetAsync<string>(0);
-            int keys = await Context.Parameters.GetAsync<int>(1);
+            CSteamID cSteam = new CSteamID(ulong.Parse(caller.Id));
+            UnturnedPlayer user = UnturnedPlayer.FromCSteamID(cSteam);
+            string playerName = command[0];
+            int keys = int.Parse(command[1]);
             Player player1 = PlayerTool.getPlayer(playerName);
             if (player1 == null)
             {
-                throw new UserFriendlyException(m_StringLocalizer["plugin_translations:error_player"]);
+                UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("error_player"), true);
+                return;
             }
-            UnturnedUser victim = (UnturnedUser)await m_UserManager.FindUserAsync(KnownActorTypes.Player, playerName, UserSearchMode.FindByNameOrId);
+            UnturnedPlayer victim = UnturnedPlayer.FromName(playerName);
             if (victim == null)
             {
-                throw new UserFriendlyException(m_StringLocalizer["plugin_translations:error_player"]);
+                UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("error_player"), true);
+                return;
             }
 
             Utils.SetPlayerMaxKeys(victim.Id, keys);
-            await user.PrintMessageAsync(m_StringLocalizer["plugin_translations:set_max_keys_correct", new { playerName = victim.DisplayName }]);
+            UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("set_max_keys_correct", victim.DisplayName), true);
+            return;
         }
     }
-    #endregion
 }

@@ -1,57 +1,51 @@
-﻿using System;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Localization;
-using Microsoft.Extensions.Logging;
-using Cysharp.Threading.Tasks;
-using OpenMod.Unturned.Plugins;
-using OpenMod.API.Plugins;
-using HarmonyLib;
-using Steamworks;
-using OpenMod.Core.Helpers;
-using System.Collections.Generic;
-using OpenMod.Unturned.Users;
-using OpenMod.API.Users;
-using OpenMod.Core.Users;
-using System.IO;
+﻿using System.Collections.Generic;
+using Rocket.Core.Plugins;
+using Rocket.Unturned.Player;
 using SDG.Unturned;
+using UnityEngine;
+using Logger = Rocket.Core.Logging.Logger;
+using HarmonyLib;
+using System.IO;
+using Steamworks;
+using Rocket.Unturned.Chat;
+using MyVehicleKeys.Model;
+using Rocket.API.Collections;
 
-[assembly: PluginMetadata("SS.MyVehicleKeys", DisplayName = "MyVehicleKeys", Author = "Senior S")]
 namespace MyVehicleKeys
 {
-    public class MyVehicleKeys : OpenModUnturnedPlugin
+    public class MyVehicleKeys : RocketPlugin<PluginConfiguration>
     {
-        private readonly IConfiguration m_Configuration;
-        private readonly IStringLocalizer m_StringLocalizer;
-        private readonly ILogger<MyVehicleKeys> m_Logger;
-        private readonly IUserManager m_UserManager;
-
+        public static MyVehicleKeys Instance;
         private sbyte tt = 0;
 
-        public MyVehicleKeys(
-            IConfiguration configuration,
-            IStringLocalizer stringLocalizer,
-            ILogger<MyVehicleKeys> logger,
-            IUserManager userManager,
-            IServiceProvider serviceProvider) : base(serviceProvider)
-        {
-            m_Configuration = configuration;
-            m_StringLocalizer = stringLocalizer;
-            m_Logger = logger;
-            m_UserManager = userManager;
-        }
-
-        protected override async UniTask OnLoadAsync()
+        protected override void Load()
         {
             var harmony = new Harmony("com.dvt.vehiclekeys");
             harmony.PatchAll();
             Patch.OnPlayerLockVehicle += OnPlayerLockVehicle;
+            Provider.onEnemyConnected += OnEnemyConnected;
             if (File.Exists(Utils.path)) return;
             else Utils.CreateInitialFile();
-            m_Logger.LogInformation("Plugin loaded correctly!");
-            
+            Logger.Log("[MyVehicleKeys] Plugin loaded correctly!");
+            Logger.Log("If you have any error you can contact the owner in discord: Senior S#9583");
+            Instance = this;
         }
 
-        #region Events
+        private void OnEnemyConnected(SteamPlayer player)
+        {
+            UnturnedPlayer user = UnturnedPlayer.FromSteamPlayer(player);
+            if (Utils.GetPlayerKeys(user.Id) == null)
+            {
+                PlayerKeys toadd = new PlayerKeys
+                {
+                    Id = user.Id,
+                    Vehicles = new List<uint>(),
+                    MaxVehicleKeys = Configuration.Instance.default_max_keys
+                };
+                Utils.AddPlayer(toadd);
+            }
+        }
+
         private void OnPlayerLockVehicle(CSteamID playerId, uint vehicleId, bool locked)
         {
             if (!locked || playerId.ToString().Length < 16)
@@ -62,48 +56,70 @@ namespace MyVehicleKeys
             {
                 return;
             }
-            AsyncHelper.RunSync(async () =>
+            tt = 1;
+            UnturnedPlayer user = UnturnedPlayer.FromCSteamID(playerId);
+            List<uint> keys = Utils.GetPlayerKeys(user.Id);
+            int maxkeys = Utils.GetPlayerMaxKeys(user.Id);
+            if (keys.Contains(vehicleId))
             {
-                tt = 1;
-                UnturnedUser user = (UnturnedUser)await m_UserManager.FindUserAsync(KnownActorTypes.Player, playerId.ToString(), UserSearchMode.FindById);
-                List<uint> keys = Utils.GetPlayerKeys(user.Id);
-                int maxkeys = Utils.GetPlayerMaxKeys(user.Id);
-                if (keys.Contains(vehicleId))
+                tt = 0;
+                return;
+            }
+            if (keys.Count >= maxkeys)
+            {
+                UnturnedChat.Say(user.CSteamID, Translate("reach_max_keys"), Color.red);
+                InteractableVehicle vv = VehicleManager.findVehicleByNetInstanceID(vehicleId);
+                VehicleManager.instance.channel.send("tellVehicleLock", ESteamCall.ALL, ESteamPacket.UPDATE_RELIABLE_BUFFER, new object[]
                 {
-                    tt = 0;
-                    return;
-                }
-                if (keys.Count >= maxkeys)
-                {
-                    await user.PrintMessageAsync(m_StringLocalizer["plugin_translations:reach_max_keys"], System.Drawing.Color.Red);
-                    InteractableVehicle vv = VehicleManager.findVehicleByNetInstanceID(vehicleId);
-                    await UniTask.SwitchToMainThread();
-                    VehicleManager.instance.channel.send("tellVehicleLock", ESteamCall.ALL, ESteamPacket.UPDATE_RELIABLE_BUFFER, new object[]
-                    {
                             vv.instanceID,
-                            user.SteamId,
-                            user.Player.Player.quests.groupID,
+                            user.CSteamID,
+                            user.Player.quests.groupID,
                             false
-                    });
-                    tt = 0;
-                    return;
-                }
-                else
-                {
-                    Utils.AddPlayerKey(vehicleId, user.Id);
-                    tt = 0;
-                    await user.PrintMessageAsync(m_StringLocalizer["plugin_translations:add_vehicle_key"], System.Drawing.Color.Green);
-                }
-            });
+                });
+                tt = 0;
+                return;
+            }
+            else
+            {
+                Utils.AddPlayerKey(vehicleId, user.Id);
+                tt = 0;
+                UnturnedChat.Say(user.CSteamID, Translate("add_vehicle_key"), Color.green);
+            }
         }
-        #endregion
 
-        protected override async UniTask OnUnloadAsync()
+        public override TranslationList DefaultTranslations
         {
-            // await UniTask.SwitchToMainThread();
+            get
+            {
+                return new TranslationList()
+                {
+                    {"add_vehicle_key", "Now you have this vehicle in your vehicle keys!"},
+                    { "add_vehicle_key_fail", "This vehicle is not added to your keys due this vehicle belongs to someone else." },
+                    { "reach_max_keys", "You reached the limit of vehicle keys!" },
+                    { "any_vehicle_keys", "You don't have any vehicle key!" },
+                    { "vehicle_keys", "You have the next vehicle keys:" },
+                    { "vehicle_position", "The position of the vehicle {0} has marked in your map." },
+                    { "error_arguments_player", "Please specify a player!" },
+                    { "error_player", "Player not found!" },
+                    { "error_keys", "You don't own this key or this key don't exist." },
+                    { "victim_reach_max_keys", "The victim player have the max amount of permitted vehicles!" },
+                    { "player_vehicle_transfered", "Vehicle {0} transfered to {1} correctly!" },
+                    { "player_vehicle_key_removed", "The vehicle key {0} has removed from your vehicle keys." },
+                    { "vehicle_forced_key_removed", "Now this vehicle don't have a key." },
+                    { "player_forced_key_removed", "Your vehicle {0} has forced removed from your keys." },
+                    { "error_forced_key_removed", "This vehicle don't have a key!" },
+                    { "error_vehicle_not_found", "You need to be looking a vehicle!" },
+                    { "error_vehicle_not_locked", "You need to see a locked vehicle!" },
+                    { "set_max_keys_correct", "Max keys for player {0} setted correctly!" }
+                };
+            }
+        }
+
+        protected override void Unload()
+        {
             Patch.OnPlayerLockVehicle -= OnPlayerLockVehicle;
-            Harmony.UnpatchAll();
-            m_Logger.LogInformation("Plugin unloaded correctly!");
+            Logger.Log("[MyVehicleKeys] Plugin loaded correctly!");
+            Logger.Log("If you have any error you can contact the owner in discord: Senior S#9583");
         }
     }
 }
