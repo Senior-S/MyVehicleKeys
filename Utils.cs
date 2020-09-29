@@ -1,6 +1,5 @@
 ﻿using MyVehicleKeys.Model;
 using Newtonsoft.Json;
-using SDG.Unturned;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -148,6 +147,6 @@ namespace MyVehicleKeys
             return null;
         }
 
-        public static readonly string path = $"{Environment.CurrentDirectory}/Servers/{Dedicator.serverID}/OpenMod/plugins/SS.MyVehicleKeys/PlayerKeys.json";
+        public static readonly string path = $"{Environment.CurrentDirectory}/Plugins/MyVehicleKeys/PlayerKeys.json";
     }
 }
