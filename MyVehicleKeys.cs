@@ -1,5 +1,4 @@
 ﻿using System;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Cysharp.Threading.Tasks;
@@ -12,32 +11,32 @@ using System.Collections.Generic;
 using OpenMod.Unturned.Users;
 using OpenMod.API.Users;
 using OpenMod.Core.Users;
-using System.IO;
 using SDG.Unturned;
+using MyVehicleKeys.Providers;
 
 [assembly: PluginMetadata("SS.MyVehicleKeys", DisplayName = "MyVehicleKeys", Author = "Senior S")]
 namespace MyVehicleKeys
 {
     public class MyVehicleKeys : OpenModUnturnedPlugin
     {
-        private readonly IConfiguration m_Configuration;
         private readonly IStringLocalizer m_StringLocalizer;
         private readonly ILogger<MyVehicleKeys> m_Logger;
         private readonly IUserManager m_UserManager;
+        private readonly MyVehicleKeysManager m_MyVehicleKeysManager;
 
         private sbyte tt = 0;
 
         public MyVehicleKeys(
-            IConfiguration configuration,
             IStringLocalizer stringLocalizer,
             ILogger<MyVehicleKeys> logger,
             IUserManager userManager,
+            MyVehicleKeysManager myVehicleKeysManager,
             IServiceProvider serviceProvider) : base(serviceProvider)
         {
-            m_Configuration = configuration;
             m_StringLocalizer = stringLocalizer;
             m_Logger = logger;
             m_UserManager = userManager;
+            m_MyVehicleKeysManager = myVehicleKeysManager;
         }
 
         protected override async UniTask OnLoadAsync()
@@ -45,16 +44,13 @@ namespace MyVehicleKeys
             var harmony = new Harmony("com.dvt.vehiclekeys");
             harmony.PatchAll();
             Patch.OnPlayerLockVehicle += OnPlayerLockVehicle;
-            if (File.Exists(Utils.path)) return;
-            else Utils.CreateInitialFile();
             m_Logger.LogInformation("Plugin loaded correctly!");
-            
         }
 
         #region Events
         private void OnPlayerLockVehicle(CSteamID playerId, uint vehicleId, bool locked)
         {
-            if (!locked || playerId.ToString().Length < 16)
+            if (!locked || Provider.server == playerId)
             {
                 return;
             }
@@ -66,8 +62,8 @@ namespace MyVehicleKeys
             {
                 tt = 1;
                 UnturnedUser user = (UnturnedUser)await m_UserManager.FindUserAsync(KnownActorTypes.Player, playerId.ToString(), UserSearchMode.FindById);
-                List<uint> keys = Utils.GetPlayerKeys(user.Id);
-                int maxkeys = Utils.GetPlayerMaxKeys(user.Id);
+                List<uint> keys = await m_MyVehicleKeysManager.GetPlayerKeysAsync(user.Id);
+                int maxkeys = await m_MyVehicleKeysManager.GetPlayerMaxKeysAsync(user.Id);
                 if (keys.Contains(vehicleId))
                 {
                     tt = 0;
@@ -86,11 +82,10 @@ namespace MyVehicleKeys
                             false
                     });
                     tt = 0;
-                    return;
                 }
                 else
                 {
-                    Utils.AddPlayerKey(vehicleId, user.Id);
+                    await m_MyVehicleKeysManager.AddPlayerKey(vehicleId, user.Id);
                     tt = 0;
                     await user.PrintMessageAsync(m_StringLocalizer["plugin_translations:add_vehicle_key"], System.Drawing.Color.Green);
                 }

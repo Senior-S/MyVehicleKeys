@@ -1,10 +1,9 @@
 ﻿using Cysharp.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using MyVehicleKeys.Helper;
+using MyVehicleKeys.Providers;
 using OpenMod.API.Commands;
-using OpenMod.API.Permissions;
 using OpenMod.API.Users;
 using OpenMod.Core.Commands;
 using OpenMod.Core.Users;
@@ -18,24 +17,84 @@ using Command = OpenMod.Core.Commands.Command;
 
 namespace MyVehicleKeys
 {
+    //#region CommandKeysUI
+    //[Command("keysui")]
+    //[CommandDescription("Show your actual keys with a UI")]
+    //public class CommandKeysUI : Command
+    //{
+    //    private readonly ILogger<CommandKeysUI> m_Logger;
+    //    private readonly IStringLocalizer m_StringLocalizer;
+
+    //    public CommandKeysUI(IServiceProvider serviceProvider, ILogger<CommandKeysUI> logger, IStringLocalizer stringLocalizer) : base(serviceProvider)
+    //    {
+    //        m_Logger = logger;
+    //        m_StringLocalizer = stringLocalizer;
+    //    }
+
+    //    protected async override Task OnExecuteAsync()
+    //    {
+    //        UnturnedUser user = (UnturnedUser)Context.Actor;
+    //        List<uint> keys = Utils.GetPlayerKeys(user.Id);
+
+    //        if (keys.Count <= 0)
+    //        {
+    //            throw new UserFriendlyException(m_StringLocalizer["plugin_translations:any_vehicle_keys"]);
+    //        }
+    //        else
+    //        {
+    //            for (int i = 0; i < keys.Count; i++)
+    //            {
+    //                InteractableVehicle vehicle = VehicleManager.findVehicleByNetInstanceID(keys[i]);
+    //                if (vehicle == null || vehicle.isExploded)
+    //                {
+    //                    Utils.RemovePlayerKey(keys[i], user.Id);
+    //                }
+    //                else
+    //                {
+    //                    string s = keys[i] + " - Name: " + vehicle.transform.name;
+    //                    if (Utils.EffectIds.TryGetValue(user.Player.Player, out List<string> value))
+    //                    {
+    //                        value.Add(s);
+    //                        Utils.EffectIds.Remove(user.Player.Player);
+    //                        Utils.EffectIds.Add(user.Player.Player, value);
+    //                    }
+    //                    else
+    //                    {
+    //                        List<string> list = new List<string>
+    //                        {
+    //                            s
+    //                        };
+    //                        Utils.EffectIds.Add(user.Player.Player, list);
+    //                    }
+    //                }
+    //            }
+    //            Utils.EffectIds.TryGetValue(user.Player.Player, out List<string> v);
+    //            await UniTask.SwitchToMainThread();
+    //            await Utils.SendKeysUI(user.Player.Player, v);
+    //            m_Logger.LogInformation("Ready");
+    //        }
+    //    }
+    //}
+    //#endregion
+
     #region CommandKeys
     [Command("keys")]
     [CommandDescription("Show your actual keys")]
     public class CommandKeys : Command
     {
-        private readonly ILogger<CommandKeys> m_Logger;
         private readonly IStringLocalizer m_StringLocalizer;
+        private readonly MyVehicleKeysManager m_MyVehicleKeysManager;
 
-        public CommandKeys(IServiceProvider serviceProvider, ILogger<CommandKeys> logger, IStringLocalizer stringLocalizer) : base(serviceProvider)
+        public CommandKeys(IServiceProvider serviceProvider, IStringLocalizer stringLocalizer, MyVehicleKeysManager myVehicleKeysManager) : base(serviceProvider)
         {
-            m_Logger = logger;
             m_StringLocalizer = stringLocalizer;
+            m_MyVehicleKeysManager = myVehicleKeysManager;
         }
 
         protected async override Task OnExecuteAsync()
         {
             UnturnedUser user = (UnturnedUser)Context.Actor;
-            List<uint> keys = Utils.GetPlayerKeys(user.Id);
+            List<uint> keys = await m_MyVehicleKeysManager.GetPlayerKeysAsync(user.Id);
 
             if (keys.Count <= 0)
             {
@@ -49,7 +108,7 @@ namespace MyVehicleKeys
                     InteractableVehicle vehicle = VehicleManager.findVehicleByNetInstanceID(keys[i]);
                     if (vehicle == null || vehicle.isExploded)
                     {
-                        Utils.RemovePlayerKey(keys[i], user.Id);
+                        await m_MyVehicleKeysManager.RemovePlayerKey(keys[i], user.Id);
                     }
                     else
                     {
@@ -71,20 +130,20 @@ namespace MyVehicleKeys
     [CommandDescription("Set the vehicle position in your map")]
     public class CommandFindVehicle : Command
     {
-        private readonly ILogger<CommandFindVehicle> m_Logger;
         private readonly IStringLocalizer m_StringLocalizer;
+        private readonly MyVehicleKeysManager m_MyVehicleKeysManager;
 
-        public CommandFindVehicle(IServiceProvider serviceProvider, ILogger<CommandFindVehicle> logger, IStringLocalizer stringLocalizer) : base(serviceProvider)
+        public CommandFindVehicle(IServiceProvider serviceProvider, IStringLocalizer stringLocalizer, MyVehicleKeysManager myVehicleKeysManager) : base(serviceProvider)
         {
-            m_Logger = logger;
             m_StringLocalizer = stringLocalizer;
+            m_MyVehicleKeysManager = myVehicleKeysManager;
         }
 
         protected async override Task OnExecuteAsync()
         {
             UnturnedUser user = (UnturnedUser)Context.Actor;
             uint id = await Context.Parameters.GetAsync<uint>(0);
-            List<uint> keys = Utils.GetPlayerKeys(user.Id);
+            List<uint> keys = await m_MyVehicleKeysManager.GetPlayerKeysAsync(user.Id);
             if (keys.Count <= 0 || keys == null)
             {
                 throw new UserFriendlyException(m_StringLocalizer["plugin_translations:any_vehicle_keys"]);
@@ -101,7 +160,7 @@ namespace MyVehicleKeys
                 else
                 {
                     await user.PrintMessageAsync(m_StringLocalizer["plugin_translations:vehicle_explode"], System.Drawing.Color.Red);
-                    Utils.RemovePlayerKey(id, user.Id);
+                    await m_MyVehicleKeysManager.RemovePlayerKey(id, user.Id);
                 }
             }
             else
@@ -123,15 +182,13 @@ namespace MyVehicleKeys
     {
         private readonly IUserManager m_UserManager;
         private readonly IStringLocalizer m_StringLocalizer;
-        private readonly IPermissionChecker m_PermissionChecker;
-        private readonly IConfiguration m_Configuration;
+        private readonly MyVehicleKeysManager m_MyVehicleKeysManager;
 
-        public CommandGiftVehicle(IServiceProvider serviceProvider, IUserManager userManager, IStringLocalizer stringLocalizer, IPermissionChecker permissionChecker, IConfiguration configuration) : base(serviceProvider)
+        public CommandGiftVehicle(IServiceProvider serviceProvider, MyVehicleKeysManager myVehicleKeysManager, IUserManager userManager, IStringLocalizer stringLocalizer) : base(serviceProvider)
         {
             m_UserManager = userManager;
             m_StringLocalizer = stringLocalizer;
-            m_PermissionChecker = permissionChecker;
-            m_Configuration = configuration;
+            m_MyVehicleKeysManager = myVehicleKeysManager;
         }
 
         protected async override Task OnExecuteAsync()
@@ -153,9 +210,9 @@ namespace MyVehicleKeys
             {
                 throw new UserFriendlyException("You can transfer a vehicle to yourself.");
             }
-            List<uint> userKeys = Utils.GetPlayerKeys(user.Id);
-            List<uint> victimKeys = Utils.GetPlayerKeys(victim.Id);
-            int vMaxKeys = Utils.GetPlayerMaxKeys(victim.Id);
+            List<uint> userKeys = await m_MyVehicleKeysManager.GetPlayerKeysAsync(user.Id);
+            List<uint> victimKeys = await m_MyVehicleKeysManager.GetPlayerKeysAsync(victim.Id);
+            int vMaxKeys = await m_MyVehicleKeysManager.GetPlayerMaxKeysAsync(victim.Id);
             if (userKeys.Contains(id))
             {
                 if (victimKeys.Count >= vMaxKeys)
@@ -164,8 +221,8 @@ namespace MyVehicleKeys
                 }
                 else
                 {
-                    Utils.RemovePlayerKey(id, user.Id);
-                    Utils.AddPlayerKey(id, user.Id);
+                    await m_MyVehicleKeysManager.RemovePlayerKey(id, user.Id);
+                    await m_MyVehicleKeysManager.AddPlayerKey(id, user.Id);
 
                     await user.PrintMessageAsync(m_StringLocalizer["plugin_translations:player_vehicle_transfered", new { vehicleId = id, victimName = victim.DisplayName }], System.Drawing.Color.Blue);
                 }
@@ -187,20 +244,20 @@ namespace MyVehicleKeys
     [CommandDescription("Delete a vehicle from your keys.")]
     public class CommandDeleteVehicle : Command
     {
-        private readonly ILogger<CommandDeleteVehicle> m_Logger;
         private readonly IStringLocalizer m_StringLocalizer;
+        private readonly MyVehicleKeysManager m_MyVehicleKeysManager;
 
-        public CommandDeleteVehicle(IServiceProvider serviceProvider, ILogger<CommandDeleteVehicle> logger, IStringLocalizer stringLocalizer) : base(serviceProvider)
+        public CommandDeleteVehicle(IServiceProvider serviceProvider, IStringLocalizer stringLocalizer, MyVehicleKeysManager myVehicleKeysManager) : base(serviceProvider)
         {
-            m_Logger = logger;
             m_StringLocalizer = stringLocalizer;
+            m_MyVehicleKeysManager = myVehicleKeysManager;
         }
 
         protected async override Task OnExecuteAsync()
         {
             UnturnedUser user = (UnturnedUser)Context.Actor;
             uint id = await Context.Parameters.GetAsync<uint>(0);
-            string error = Utils.RemovePlayerKey(id, user.Id);
+            string error = await m_MyVehicleKeysManager.RemovePlayerKey(id, user.Id);
             if (error == "nokey")
             {
                 throw new UserFriendlyException(m_StringLocalizer["plugin_translations:error_keys"]);
@@ -233,12 +290,14 @@ namespace MyVehicleKeys
         private readonly ILogger<CommandRemoveVehicleKey> m_Logger;
         private readonly IUserManager m_UserManager;
         private readonly IStringLocalizer m_StringLocalizer;
+        private readonly MyVehicleKeysManager m_MyVehicleKeysManager;
 
-        public CommandRemoveVehicleKey(IServiceProvider serviceProvider, ILogger<CommandRemoveVehicleKey> logger, IUserManager userManager, IStringLocalizer stringLocalizer) : base(serviceProvider)
+        public CommandRemoveVehicleKey(IServiceProvider serviceProvider, MyVehicleKeysManager myVehicleKeysManager,ILogger<CommandRemoveVehicleKey> logger, IUserManager userManager, IStringLocalizer stringLocalizer) : base(serviceProvider)
         {
             m_Logger = logger;
             m_UserManager = userManager;
             m_StringLocalizer = stringLocalizer;
+            m_MyVehicleKeysManager = myVehicleKeysManager;
         }
 
         protected async override Task OnExecuteAsync()
@@ -247,14 +306,14 @@ namespace MyVehicleKeys
             var vehicle = RaycastHelper.GetVehicleFromHits(RaycastHelper.RaycastAll(new Ray(user.Player.Player.look.aim.position, user.Player.Player.look.aim.forward), 4f, RayMasks.VEHICLE));
             if (vehicle != null)
             {
-                string Owner = Utils.CheckVehicleOwner(vehicle.instanceID);
+                string Owner = await m_MyVehicleKeysManager.CheckVehicleOwner(vehicle.instanceID);
                 if (Owner == null)
                 {
                     throw new UserFriendlyException(m_StringLocalizer["plugin_translations:error_forced_key_removed"]);
                 }
                 else
                 {
-                    Utils.RemovePlayerKey(vehicle.instanceID, Owner);
+                    await m_MyVehicleKeysManager.RemovePlayerKey(vehicle.instanceID, Owner);
                     await user.PrintMessageAsync(m_StringLocalizer["plugin_translations:vehicle_forced_key_removed"], System.Drawing.Color.Green);
                     await UniTask.SwitchToMainThread();
                     VehicleManager.instance.channel.send("tellVehicleLock", ESteamCall.ALL, ESteamPacket.UPDATE_RELIABLE_BUFFER, new object[]
@@ -292,12 +351,14 @@ namespace MyVehicleKeys
         private readonly ILogger<CommandSetPlayerMaxKeys> m_Logger;
         private readonly IStringLocalizer m_StringLocalizer;
         private readonly IUserManager m_UserManager;
+        private readonly MyVehicleKeysManager m_MyVehicleKeysManager;
 
-        public CommandSetPlayerMaxKeys(IServiceProvider serviceProvider, ILogger<CommandSetPlayerMaxKeys> logger, IStringLocalizer stringLocalizer, IUserManager userManager) : base(serviceProvider)
+        public CommandSetPlayerMaxKeys(IServiceProvider serviceProvider, MyVehicleKeysManager myVehicleKeysManager,ILogger<CommandSetPlayerMaxKeys> logger, IStringLocalizer stringLocalizer, IUserManager userManager) : base(serviceProvider)
         {
             m_Logger = logger;
             m_StringLocalizer = stringLocalizer;
             m_UserManager = userManager;
+            m_MyVehicleKeysManager = myVehicleKeysManager;
         }
 
         protected async override Task OnExecuteAsync()
@@ -316,7 +377,7 @@ namespace MyVehicleKeys
                 throw new UserFriendlyException(m_StringLocalizer["plugin_translations:error_player"]);
             }
 
-            Utils.SetPlayerMaxKeys(victim.Id, keys);
+            await m_MyVehicleKeysManager.SetPlayerMaxKeysAsync(victim.Id, keys);
             await user.PrintMessageAsync(m_StringLocalizer["plugin_translations:set_max_keys_correct", new { playerName = victim.DisplayName }]);
         }
     }
