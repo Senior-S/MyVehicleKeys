@@ -26,10 +26,8 @@ namespace MyVehicleKeys.Commands
 
         public void Execute(IRocketPlayer caller, string[] command)
         {
-            CSteamID cSteam = new CSteamID(ulong.Parse(caller.Id));
-            UnturnedPlayer user = UnturnedPlayer.FromCSteamID(cSteam);
+            UnturnedPlayer user = (UnturnedPlayer)caller;
             List<uint> keys = Utils.GetPlayerKeys(user.Id);
-
             if (keys.Count <= 0)
             {
                 UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("any_vehicle_keys"), true);
@@ -41,13 +39,13 @@ namespace MyVehicleKeys.Commands
                 for (int i = 0; i < keys.Count; i++)
                 {
                     InteractableVehicle vehicle = VehicleManager.findVehicleByNetInstanceID(keys[i]);
-                    if (vehicle == null || vehicle.isExploded)
+                    if (vehicle == null || vehicle.isExploded || vehicle.isDrowned)
                     {
                         Utils.RemovePlayerKey(keys[i], user.Id);
                     }
                     else
                     {
-                        var distance = UnityEngine.Vector3.Distance(user.Player.transform.position, vehicle.transform.position);
+                        var distance = Vector3.Distance(user.Player.transform.position, vehicle.transform.position);
                         UnturnedChat.Say(user.CSteamID, $"{keys[i]}(Vehicle id: {vehicle.id}, Distance: {Math.Floor(distance)})", Color.white, true);
                     }
                 }
@@ -71,8 +69,13 @@ namespace MyVehicleKeys.Commands
 
         public void Execute(IRocketPlayer caller, string[] command)
         {
-            CSteamID cSteam = new CSteamID(ulong.Parse(caller.Id));
-            UnturnedPlayer user = UnturnedPlayer.FromCSteamID(cSteam);
+            UnturnedPlayer user = (UnturnedPlayer)caller;
+            if (command.Length != 1)
+            {
+                UnturnedChat.Say(user.CSteamID, "Error! Correct usage: /findvehicle "+Syntax, Color.red, true);
+                return;
+            }
+
             uint id = uint.Parse(command[0]);
             List<uint> keys = Utils.GetPlayerKeys(user.Id);
             if (keys.Count <= 0 || keys == null)
@@ -117,8 +120,7 @@ namespace MyVehicleKeys.Commands
 
         public void Execute(IRocketPlayer caller, string[] command)
         {
-            CSteamID cSteam = new CSteamID(ulong.Parse(caller.Id));
-            UnturnedPlayer user = UnturnedPlayer.FromCSteamID(cSteam);
+            UnturnedPlayer user = (UnturnedPlayer)caller;
             uint id = uint.Parse(command[1]);
             string vic = command[0];
             Player player = PlayerTool.getPlayer(vic);
@@ -181,8 +183,12 @@ namespace MyVehicleKeys.Commands
 
         public void Execute(IRocketPlayer caller, string[] command)
         {
-            CSteamID cSteam = new CSteamID(ulong.Parse(caller.Id));
-            UnturnedPlayer user = UnturnedPlayer.FromCSteamID(cSteam);
+            UnturnedPlayer user = (UnturnedPlayer)caller;
+            if (command.Length != 1)
+            {
+                UnturnedChat.Say(user, "Error! Correct Usage: /deletevehicle "+Syntax, Color.red);
+                return;
+            }
             uint id = uint.Parse(command[1]);
             string error = Utils.RemovePlayerKey(id, user.Id);
             if (error == "nokey")
@@ -221,8 +227,7 @@ namespace MyVehicleKeys.Commands
 
         public void Execute(IRocketPlayer caller, string[] command)
         {
-            CSteamID cSteam = new CSteamID(ulong.Parse(caller.Id));
-            UnturnedPlayer user = UnturnedPlayer.FromCSteamID(cSteam);
+            UnturnedPlayer user = (UnturnedPlayer)caller;
             var vehicle = RaycastHelper.GetVehicleFromHits(RaycastHelper.RaycastAll(new Ray(user.Player.look.aim.position, user.Player.look.aim.forward), 4f, RayMasks.VEHICLE));
             if (vehicle != null)
             {
@@ -275,8 +280,12 @@ namespace MyVehicleKeys.Commands
 
         public void Execute(IRocketPlayer caller, string[] command)
         {
-            CSteamID cSteam = new CSteamID(ulong.Parse(caller.Id));
-            UnturnedPlayer user = UnturnedPlayer.FromCSteamID(cSteam);
+            UnturnedPlayer user = (UnturnedPlayer)caller;
+            if (command.Length != 2)
+            {
+                UnturnedChat.Say(user, "Error! Correct Usage: /setplayermaxkeys "+Syntax, Color.red);
+                return;
+            }
             string playerName = command[0];
             int keys = int.Parse(command[1]);
             Player player1 = PlayerTool.getPlayer(playerName);
