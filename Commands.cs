@@ -28,6 +28,11 @@ namespace MyVehicleKeys.Commands
         {
             UnturnedPlayer user = (UnturnedPlayer)caller;
             List<uint> keys = Utils.GetPlayerKeys(user.Id);
+            if (keys == null)
+            {
+                UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("any_vehicle_keys"), true);
+                return;
+            }
             if (keys.Count <= 0)
             {
                 UnturnedChat.Say(user.CSteamID, MyVehicleKeys.Instance.Translate("any_vehicle_keys"), true);
